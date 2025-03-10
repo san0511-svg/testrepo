@@ -1,0 +1,63 @@
+//@version=5
+strategy("Unified Strategy - Long & Short with TP by EMA", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=10)
+
+// Parámetros de entrada
+ema20_length = input(20, title="EMA 20 Periodos")
+ema300_length = input(300, title="EMA 300 Periodos")
+risk_reward_ratio = input.float(1.0, title="Relación Riesgo/Beneficio para Activar TP por EMA", minval=1)
+
+// Cálculo de EMAs
+ema20 = ta.ema(close, ema20_length)
+ema300 = ta.ema(close, ema300_length)
+
+// Lógica de tendencia
+is_bullish = ema20 > ema300
+is_bearish = ema20 < ema300
+
+// Swing points
+swing_high = ta.highest(high, 10)
+swing_low = ta.lowest(low, 10)
+
+// Gestión de riesgo
+var float stop_loss = na
+var float take_profit_trigger = na
+
+// **Entradas en Largo**
+long_condition = is_bullish and ta.crossover(close, ema20)
+if long_condition and not strategy.position_size
+    stop_loss := swing_low
+    take_profit_trigger := close + (close - stop_loss) * risk_reward_ratio
+    strategy.entry("Long", strategy.long)
+
+    // Línea de stop-loss
+    line.new(bar_index, stop_loss, bar_index + 10, stop_loss, color=color.green, style=line.style_dotted, width=2)
+
+// **Entradas en Corto**
+short_condition = is_bearish and ta.crossover(ema20, close)
+if short_condition and not strategy.position_size
+    stop_loss := swing_high
+    take_profit_trigger := close - (stop_loss - close) * risk_reward_ratio
+    strategy.entry("Short", strategy.short)
+
+    // Línea de stop-loss
+    line.new(bar_index, stop_loss, bar_index + 10, stop_loss, color=color.red, style=line.style_dotted, width=2)
+
+// **Salida por Take-Profit basado en EMA de 20**
+if strategy.position_size > 0
+    // Para operaciones en largo
+    if strategy.position_size > 0 and close >= take_profit_trigger and close < ema20
+        strategy.close("Long", comment="TP by EMA")
+    
+    // Para operaciones en corto
+    if strategy.position_size < 0 and close <= take_profit_trigger and close > ema20
+        strategy.close("Short", comment="TP by EMA")
+
+// **Salida por Stop-Loss**
+if strategy.position_size > 0 and close <= stop_loss
+    strategy.close("Long", comment="Stop-Loss")
+if strategy.position_size < 0 and close >= stop_loss
+    strategy.close("Short", comment="Stop-Loss")
+
+// Visualización de EMAs
+plot(ema20, color=color.blue, title="EMA 20")
+plot(ema300, color=color.red, title="EMA 300")
